@@ -1,0 +1,748 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>考卷報讀台</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+<style>
+/* Layout: exam pages scroll on the left like paper on a desk; the reading panel sits on the right (bottom sheet on phones). */
+:root{
+  --desk:#e9edf2; --paper:#ffffff; --card:#ffffff; --panel:#f8fafc; --ink:#17283d; --muted:#5b6b7e; --line:#cfd8e2;
+  --accent:#1f4f8a; --accent-ink:#ffffff; --accent-soft:#dde8f5;
+  --marker:#ffe14d; --hl-sent:#fff2b3; --hl-now:#ffc93c; --pic-bg:#e4e9ef;
+  --warn-bg:#fff4dc; --warn-fg:#7a4b00;
+  --f-ui:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --desk:#10161d; --card:#223040; --panel:#18212b; --ink:#e6edf5; --muted:#9aabbd; --line:#2c3a49;
+  --accent:#7fb2ef; --accent-ink:#0d1a29; --accent-soft:#1f3349;
+  --hl-sent:#4a4318; --hl-now:#9a7400; --pic-bg:#33414f;
+  --warn-bg:#3a2c10; --warn-fg:#ffd98a; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --desk:#10161d; --card:#223040; --panel:#18212b; --ink:#e6edf5; --muted:#9aabbd; --line:#2c3a49;
+  --accent:#7fb2ef; --accent-ink:#0d1a29; --accent-soft:#1f3349;
+  --hl-sent:#4a4318; --hl-now:#9a7400; --pic-bg:#33414f;
+  --warn-bg:#3a2c10; --warn-fg:#ffd98a; color-scheme:dark }
+html,body{height:100%}
+body{background:var(--desk);color:var(--ink);font-family:var(--f-ui);font-size:16px;line-height:1.6}
+*{box-sizing:border-box}
+button,select,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+.app{display:grid;grid-template-columns:minmax(0,1fr) 390px;height:100%}
+.pages{overflow-y:auto;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:16px;position:relative}
+.pages-inner{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+.page{position:relative;background:var(--paper);box-shadow:0 1px 2px rgba(0,0,0,.08),0 6px 20px rgba(20,40,70,.10);border-radius:3px;overflow:hidden}
+.page canvas{display:block;width:100%;height:auto}
+.no-text{position:absolute;left:12px;right:12px;bottom:12px;background:#fff4dc;color:#7a4b00;padding:10px 14px;border-radius:8px;font-size:14px;z-index:4}
+
+/* highlight layer on the paper (paper is always white, so fixed colors) */
+.hl{position:absolute;inset:0;pointer-events:none;z-index:1}
+.hl div{position:absolute;border-radius:3px;mix-blend-mode:multiply}
+.hl .s{background:rgba(255,226,92,.42)}
+.hl .p{background:rgba(255,226,92,.38);outline:2px solid rgba(230,180,0,.55)}
+.hl .n{background:rgba(255,168,0,.62)}
+.blk{position:absolute;border-radius:5px;cursor:pointer;border:1.5px dashed transparent;transition:border-color .15s,background .15s;padding:0;background:transparent;z-index:2}
+.show-boxes .blk{border-color:rgba(31,79,138,.22)}
+.blk:hover{background:rgba(31,79,138,.05);border-color:rgba(31,79,138,.5)}
+.blk.active{border:1.5px solid rgba(214,166,0,.75)}
+
+.drop{position:absolute;inset:0;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 14%,transparent);border:3px dashed var(--accent);font-size:22px;font-weight:700;color:var(--accent);z-index:20;pointer-events:none}
+.empty{display:grid;place-items:center;min-height:70vh;text-align:center;color:var(--muted)}
+.empty .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:32px 28px;max-width:440px}
+.empty h2{margin:0 0 6px;color:var(--ink);font-size:22px}
+.loading{padding:40px 0;text-align:center;color:var(--muted)}
+
+/* panel */
+.desk{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0;padding-block:18px;padding-left:20px;padding-right:max(20px,env(safe-area-inset-right,0px));gap:14px;overflow-y:auto}
+.brand{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.brand h1{margin:0;font-size:20px;font-weight:900;letter-spacing:.06em}
+.brand h1 span{background:linear-gradient(transparent 58%,var(--marker) 58%,var(--marker) 92%,transparent 92%);padding:0 2px}
+.file-row{display:flex;gap:8px;align-items:center;min-width:0}
+.file-name{flex:1;min-width:0;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:7px 12px;cursor:pointer;font-size:14px;font-weight:500;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+
+.now{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.now-head{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.now-text{padding-top:.35em;font-size:21px;line-height:2.15;font-weight:500;min-height:4em;max-height:34vh;overflow-y:auto;word-break:break-word}
+.now-text .sent{cursor:pointer;border-radius:4px;padding:2px 0;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.now-text .sent:hover{text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:6px}
+.now-text .sent.on{background:var(--hl-sent)}
+.now-text .tk.reading{background:var(--hl-now);border-radius:3px}
+.now-text ruby{ruby-position:over}
+.now-text rt{font-size:.48em;color:var(--accent);font-weight:700}
+.now-text .pic{display:inline-block;font-size:.62em;font-weight:700;color:var(--muted);background:var(--pic-bg);border-radius:5px;padding:0 6px;margin:0 2px;vertical-align:.2em;line-height:1.7}
+.now-text .placeholder{color:var(--muted);font-size:16px;font-weight:400;line-height:1.7}
+.now textarea{width:100%;min-height:9em;font-size:17px;line-height:1.7;border:1.5px solid var(--accent);border-radius:8px;padding:8px 10px;resize:vertical;background:var(--card);color:var(--ink)}
+.linkbtn{background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;padding:2px 0;font-weight:500}
+.linkbtn:hover{text-decoration:underline}
+.edited{font-size:12px;color:var(--warn-fg);font-weight:700}
+
+.transport{display:grid;grid-template-columns:1fr 1.6fr 1fr;gap:8px}
+.tbtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:10px 6px;cursor:pointer;font-size:13px;font-weight:500;min-height:72px}
+.tbtn svg{width:26px;height:26px}
+.tbtn:hover{border-color:var(--accent)}
+.tbtn.play{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-size:15px;font-weight:700}
+.tbtn.play svg{width:30px;height:30px}
+
+.speed{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px}
+.speed .lbl{font-size:14px;padding-left:8px;color:var(--muted);white-space:nowrap}
+.sbtn{flex:1;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:9px;padding:8px 4px;cursor:pointer;font-size:15px;font-weight:700;min-height:44px;white-space:nowrap}
+.sbtn:hover{border-color:var(--accent)}
+.sbtn:disabled{opacity:.4;cursor:default}
+.speed .val{min-width:4.2em;text-align:center;font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
+.speed .val small{display:block;font-size:11px;font-weight:500;color:var(--muted);line-height:1.2}
+
+.settings{display:flex;flex-direction:column;gap:12px;font-size:14px}
+.set{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.set select{max-width:210px;min-width:0;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:5px 8px}
+.toggle{display:flex;align-items:center;gap:8px;cursor:pointer}
+.toggle input{width:18px;height:18px;accent-color:var(--accent)}
+.section-label{font-size:12px;letter-spacing:.12em;color:var(--muted);font-weight:700;margin:0}
+.hint{font-size:12.5px;color:var(--muted);line-height:1.75;margin:0}
+kbd{font-family:inherit;font-size:11.5px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;background:var(--card);color:var(--ink)}
+.warn{background:var(--warn-bg);color:var(--warn-fg);border-radius:8px;padding:8px 12px;font-size:13px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:none;background:var(--card);color:var(--ink);padding:4px 12px;cursor:pointer;font-size:14px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.more-btn{display:none}
+
+@media (max-width:900px){
+  .app{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}
+  .pages{padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .desk{border-left:none;border-top:1px solid var(--line);max-height:56vh;padding-block:12px calc(12px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));gap:10px;box-shadow:0 -6px 20px rgba(0,0,0,.08)}
+  .now-text{font-size:18px;max-height:16vh;min-height:2.4em}
+  .tbtn{min-height:56px}
+  .details-m{display:none}
+  .desk.more .details-m{display:flex}
+  .more-btn{display:inline-block}
+}
+body.student .brand,body.student .file-row,body.student .now,body.student .speed,body.student .settings,body.student #prevBtn,body.student #playBtn{display:none!important}
+body.student .app{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}
+body.student .desk{border-left:none;border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));max-height:none;overflow:visible}
+body.student .transport{grid-template-columns:1fr}
+body.student .tbtn{flex-direction:row;gap:10px;min-height:64px;font-size:20px;font-weight:700}
+body.student .show-boxes .blk{border-color:transparent}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+
+<div class="app" id="app">
+  <main class="pages" id="pages" aria-label="考卷">
+    <div class="pages-inner show-boxes" id="pagesInner">
+      <div class="loading">正在載入範例考卷…</div>
+    </div>
+  </main>
+
+  <aside class="desk" id="desk" aria-label="報讀控制">
+    <div class="brand">
+      <h1><span>考卷報讀台</span></h1>
+      <button class="btn more-btn" id="moreBtn" type="button" aria-expanded="false">設定</button>
+    </div>
+
+    <div class="file-row">
+      <button class="btn primary" id="pickBtn" type="button">上傳考卷 PDF</button>
+      <span class="file-name" id="fileName">尚未選擇檔案</span>
+      <input type="file" id="fileInput" accept="application/pdf,.pdf" hidden>
+    </div>
+
+    <div class="warn" id="voiceWarn" hidden>這台裝置找不到中文語音，念出來可能不正確。請改用 Chrome、Edge 或 iPad 的 Safari。</div>
+
+    <section class="now" aria-live="polite">
+      <div class="now-head">
+        <span id="nowWhere">點考卷上的句子開始念</span>
+        <span><span class="edited" id="editedTag" hidden>已修改　</span><button class="linkbtn" id="editBtn" type="button">修改念法</button></span>
+      </div>
+      <div class="now-text" id="nowText"><span class="placeholder">點考卷上任何一句，就只念那一句，念到逗號或句號就停。要念下一句，再點一次，或按「念下一句」。</span></div>
+      <div id="editWrap" hidden>
+        <textarea id="editArea" aria-label="修改這一題要念的文字，一行一句"></textarea>
+        <p class="hint" style="margin:4px 0 0">一行是一句。破音字寫成 長〔ㄓㄤˇ〕，圖片寫成〔請看圖〕或〔圖片〕。</p>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
+          <button class="btn" id="resetEdit" type="button">還原自動文字</button>
+          <button class="btn primary" id="saveEdit" type="button">儲存</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="transport">
+      <button class="tbtn" id="prevBtn" type="button"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg>上一句</button>
+      <button class="tbtn play" id="playBtn" type="button"><svg id="playIcon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg><span id="playLabel">開始念</span></button>
+      <button class="tbtn" id="againBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v4h4"/></svg>再念一次</button>
+    </div>
+
+    <div class="speed" role="group" aria-label="語速">
+      <span class="lbl">語速</span>
+      <button class="sbtn" id="slower" type="button" aria-label="念慢一點">－ 慢一點</button>
+      <span class="val" id="rateVal" aria-live="polite">0.9×<small>適中</small></span>
+      <button class="sbtn" id="faster" type="button" aria-label="念快一點">＋ 快一點</button>
+    </div>
+
+    <div class="settings details-m">
+      <p class="section-label">報讀設定</p>
+      <div class="set"><span>每句念</span><span class="seg" role="group" aria-label="每句念幾次"><button type="button" data-rep="1" aria-pressed="true">1 次</button><button type="button" data-rep="2" aria-pressed="false">2 次</button></span></div>
+      <div class="set"><label for="voice">聲音</label><select id="voice"></select></div>
+      <label class="toggle"><input type="checkbox" id="numRead" checked> 題號念成「第 1 題」「第 2 小題」</label>
+      <label class="toggle"><input type="checkbox" id="showBoxes" checked> 在考卷上顯示可點選的範圍</label>
+      <p class="hint">鍵盤：<kbd>空白鍵</kbd> 念下一句（念的時候按是停止）　<kbd>←</kbd> 上一句　<kbd>R</kbd> 重念　<kbd>－</kbd><kbd>＋</kbd> 語速</p>
+      <p class="hint">大張的圖會念「請看圖」；題目裡的小圖示不出聲，只用網底帶過。注音字型的破音字照標的注音念。語調最自然的是 Edge 的「Natural」中文聲音，可在上面「聲音」選擇。</p>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+/* items: [{s,x,w,base,fs}] in top-left page units; images: [[x0,y0,x1,y1]] */
+function buildBlocks(items, images, W, H){
+  const START=/^\s*([一二三四五六七八九十]+\s*[\.、．]|\d{1,2}\s*[\.、．](?!\d)|[（(]\s*\d{1,2}\s*[)）]|[①-⑳])/;
+  const isWide=c=>/[\u2E80-\u9fff\uff00-\uffef\u3000-\u303f\u2460-\u24ff\u25a0-\u25ff\u3105-\u3129]/.test(c);
+  let its=[];
+  for(const i of items){ if(!i.s||!i.s.trim()) continue;
+    const chars=Array.from(i.s); const w=i.w||i.fs*chars.length*0.8;
+    const wt=chars.map(c=>isWide(c)?1:0.5), tot=wt.reduce((a,b)=>a+b,0)||1;
+    let x=i.x; const g=chars.map((c,k)=>{const x0=x; x+=w*wt[k]/tot; return {ch:c, x0, x1:x, v:i.v||0}});
+    its.push({s:i.s,x:i.x,x2:i.x+w,top:i.base-i.fs*0.9,bot:i.base+i.fs*0.2,base:i.base,fs:i.fs,g});
+  }
+  const rowsOf=arr=>{
+    const rows=[];
+    for(const i of [...arr].sort((a,b)=>a.base-b.base)){
+      let r=rows.find(R=>Math.abs(R.base-i.base)<Math.max(R.fs,i.fs)*0.45);
+      if(!r){r={base:i.base,fs:i.fs,items:[]};rows.push(r);}
+      r.items.push(i); r.fs=Math.max(r.fs,i.fs);
+    }
+    rows.forEach(r=>r.items.sort((a,b)=>a.x-b.x));
+    return rows;
+  };
+  const join=arr=>{let t='',px=null;const gl=[];const fs=Math.max(...arr.map(i=>i.fs));
+    for(const i of arr){
+      if(px!==null&&!/\s$/.test(t)&&(i.x-px>fs*1.2||/\d$/.test(t)&&/^\d/.test(i.s)&&i.x-px>fs*0.25)){t+=' ';gl.push({ch:' ',sp:true});}
+      t+=i.s; for(const g of i.g) gl.push(g.pic?g:{ch:g.ch,v:g.v,r:[g.x0,i.base-i.fs*0.95,g.x1,i.base+i.fs*0.22]}); px=i.x2;}
+    return {text:t.replace(/\s+/g,' ').trim(),gl};};
+  const drop=new Set();
+  for(const r of rowsOf(its)){
+    const t=join(r.items).text.replace(/\s/g,'');
+    if(/^第\d+頁[，,]?共\d+頁$/.test(t)||/^[-–]?\d+[-–]?$/.test(t)&&r.base>H*0.92||/^\d+\/\d+$/.test(t)&&r.base>H*0.9) r.items.forEach(i=>drop.add(i));
+  }
+  its=its.filter(i=>!drop.has(i));
+  if(!its.length) return [];
+  const fsMed=[...its].map(i=>i.fs).sort((a,b)=>a-b)[Math.floor(its.length/2)];
+  // pictures: small ones sitting on a text row become inline "〔圖片〕"; the rest become their own "〔請看圖〕" line
+  const bigImgs=[];
+  const imgs=(images||[]).filter(b=>{const w=b[2]-b[0],h=b[3]-b[1];return w>6&&h>6&&w*h<W*H*0.8&&w*h>fsMed*fsMed*0.8});
+  const rows0=rowsOf(its);
+  for(const b of imgs){
+    const h=b[3]-b[1],cy=(b[1]+b[3])/2;
+    const row=h<=fsMed*3.2&&rows0.find(r=>{const top=r.base-r.fs*1.2,bot=r.base+r.fs*0.5;return cy>=top&&cy<=bot&&r.items.some(i=>b[0]<=i.x2+r.fs*8&&b[2]>=i.x-r.fs*8)});
+    if(row){const it={s:'\uFFFC',x:b[0],x2:b[2],base:row.base,fs:row.fs,top:row.base-row.fs*0.9,bot:row.base+row.fs*0.2,g:[{ch:'\uFFFC',pic:'inline',r:b}]};its.push(it);row.items.push(it);}
+    else bigImgs.push(b);
+  }
+  let best=null;
+  for(let sx=W*0.35;sx<=W*0.65;sx+=2){
+    let c=0,l=0,r=0;
+    for(const i of its){if(i.x<sx-1&&i.x2>sx+1)c++;else if(i.x2<=sx+1)l++;else r++;}
+    if(l>3&&r>3&&(!best||c<best.c||c===best.c&&Math.abs(sx-W/2)<Math.abs(best.sx-W/2)))best={sx,c};
+  }
+  const twoCol=best&&best.c<=Math.max(3,its.length*0.08);
+  const side=new Map();
+  if(!twoCol) its.forEach(i=>side.set(i,'L'));
+  else{
+    const sx=best.sx;
+    its.forEach(i=>side.set(i,i.x<sx-1&&i.x2>sx+1?'F':(i.x2<=sx+1?'L':'R')));
+    const rx=its.filter(i=>side.get(i)==='R').map(i=>i.x).sort((a,b)=>a-b);
+    const rMargin=rx[Math.floor(rx.length*0.05)]||sx;
+    for(const r of rowsOf(its)){
+      for(const i of r.items) if(side.get(i)==='R'&&i.x<rMargin-i.fs*0.4){
+        const leftN=r.items.filter(j=>side.get(j)==='L'&&j.x2<=i.x+1).pop();
+        if(leftN&&i.x-leftN.x2<i.fs*1.5) side.set(i,'L');
+      }
+    }
+    const rows=rowsOf(its);
+    for(const r of rows){
+      if(r.base>H*0.3) break;
+      const L=r.items.filter(i=>side.get(i)!=='R'),R=r.items.filter(i=>side.get(i)==='R');
+      if((L.length&&START.test(join(L).text))||(R.length&&START.test(join(R).text))) break;
+      if(L.length&&R.length) r.items.forEach(i=>side.set(i,'F'));
+    }
+    for(const r of rows) if(r.items.some(i=>side.get(i)==='F')) r.items.forEach(i=>side.set(i,'F'));
+  }
+  const imgSide=b=>{if(!twoCol)return'L';const sx=best.sx,l=Math.max(0,Math.min(b[2],sx)-b[0]),r=Math.max(0,b[2]-Math.max(b[0],sx));if(l>W*0.3&&r>W*0.3)return'F';return l>=r?'L':'R'};
+  const lines=col=>rowsOf(its.filter(i=>side.get(i)===col)).flatMap(r=>{
+    const segs=[];let cur=null;
+    for(const i of r.items){if(!cur||i.x-cur.x2>r.fs*8){cur={items:[],x:i.x,x2:i.x2};segs.push(cur);}cur.items.push(i);cur.x2=Math.max(cur.x2,i.x2);}
+    return segs.map(s=>({col,fs:r.fs,x:s.x,x2:s.x2,top:Math.min(...s.items.map(i=>i.top)),bot:Math.max(...s.items.map(i=>i.bot)),...(()=>{const j=join(s.items);return {text:j.text,gl:j.gl}})()}));
+  }).concat(bigImgs.filter(b=>imgSide(b)===col).map(b=>({col,fs:fsMed,x:b[0],x2:b[2],top:b[1],bot:b[3],text:'\uFFFC',img:true,gl:[{ch:'\uFFFC',pic:'big',r:b}]})))
+    .sort((a,b)=>a.top-b.top||a.x-b.x);
+  const F=lines('F'),L=lines('L'),R=lines('R');
+  const colTop=Math.min(...[...L,...R].filter(l=>!l.img).map(l=>l.top),Infinity);
+  const ordered=[...F.filter(l=>l.top<colTop),...L,...R,...F.filter(l=>l.top>=colTop)];
+  const blocks=[];let cur=null;
+  for(const l of ordered){
+    const isStart=!l.img&&START.test(l.text);
+    if(!cur||isStart||l.col!==cur.col||(cur.col==='F'&&!l.img&&l.top-cur.bot>l.fs*2)){cur={lines:[],col:l.col};blocks.push(cur);}
+    cur.lines.push(l);
+  }
+  return blocks.filter(b=>b.lines.some(l=>!l.img)).map(b=>{
+    const x=Math.min(...b.lines.map(l=>l.x)),x2=Math.max(...b.lines.map(l=>l.x2)),top=Math.min(...b.lines.map(l=>l.top)),bot=Math.max(...b.lines.map(l=>l.bot));
+    const glyphs=[];b.lines.forEach((l,k)=>{if(k)glyphs.push({ch:'\n',nl:true});for(const g of l.gl)glyphs.push(g.r?{...g,r:[g.r[0]/W,g.r[1]/H,g.r[2]/W,g.r[3]/H]}:g)});
+    return {glyphs,rect:[x/W,top/H,(x2-x)/W,(bot-top)/H]};
+  });
+}
+
+
+/* 報讀版 PDF：文字層已按閱讀順序排好，直接照順序分行、分題。〔請看圖:x0,y0,x1,y1〕標記圖片位置（千分比）。 */
+function buildBlocksOrdered(items, W, H){
+  const START=/^\s*(\d{1,2}\s*[\.．](?!\d)|[一二三四五六七八九十]+\s*[、．.])/;
+  const isWide=c=>/[\u2E80-\u9fff\uff00-\uffef\u3000-\u303f\u2460-\u24ff\u25a0-\u25ff\u3105-\u3129\u2010-\u203f]/.test(c);
+  const lines=[];let cur=null;
+  for(const i of items){
+    if(!i.s) continue;
+    const chars=Array.from(i.s);const w=i.w||i.fs*chars.length*0.8;
+    const fsM=cur?Math.max(cur.fs,i.fs):i.fs;
+    const same=cur&&Math.abs(cur.base-i.base)<fsM*0.45&&i.x>=cur.x2-fsM*0.6&&i.fs/cur.fs<2.5&&cur.fs/i.fs<2.5;
+    if(!i.s.trim()){if(cur&&same)cur.pendSpace=true;continue}
+    if(!same){cur={base:i.base,fs:i.fs,x:i.x,x2:i.x,gl:[]};lines.push(cur)}
+    else if(cur.pendSpace||i.x-cur.x2>fsM*1.2){cur.gl.push({ch:' ',sp:true})}
+    cur.pendSpace=false;
+    const wt=chars.map(c=>isWide(c)?1:0.5),tot=wt.reduce((a,b)=>a+b,0)||1;let x=i.x;
+    chars.forEach((c,k)=>{const x0=x;x+=w*wt[k]/tot;cur.gl.push({ch:c,r:[x0,i.base-i.fs*0.95,x,i.base+i.fs*0.22]})});
+    cur.x2=Math.max(cur.x2,i.x+w);cur.fs=Math.max(cur.fs,i.fs);
+  }
+  // 圖片標記
+  for(const l of lines){
+    const s=l.gl.map(g=>g.ch.length>1?'\uFFFD':g.ch).join('');
+    const re=/〔(請看圖|圖片):(\d+),(\d+),(\d+),(\d+)〕/g;let m,out=[],last=0;
+    while((m=re.exec(s))){out.push(...l.gl.slice(last,m.index));out.push({ch:'\uFFFC',pic:m[1]==='請看圖'?'big':'inline',r:[m[2]*W/1000,m[3]*H/1000,m[4]*W/1000,m[5]*H/1000]});last=m.index+m[0].length}
+    if(last){out.push(...l.gl.slice(last));l.gl=out}
+    while(l.gl.length&&l.gl[0].sp)l.gl.shift();
+    l.text=l.gl.map(g=>g.ch).join('');
+  }
+  const blocks=[];let blk=null;
+  for(const l of lines){
+    if(!l.gl.length)continue;
+    const x0=Math.min(...l.gl.filter(g=>g.r).map(g=>g.r[0]));
+    if(!blk||(START.test(l.text)&&x0<W*0.13)){blk={lines:[]};blocks.push(blk)}
+    blk.lines.push(l);
+  }
+  return blocks.map(b=>{
+    const glyphs=[];b.lines.forEach((l,k)=>{if(k)glyphs.push({ch:'\n',nl:true});for(const g of l.gl)glyphs.push(g.r?{...g,r:[g.r[0]/W,g.r[1]/H,g.r[2]/W,g.r[3]/H]}:g)});
+    const rs=glyphs.filter(g=>g.r&&!g.pic).map(g=>g.r);
+    const x=Math.min(...rs.map(r=>r[0])),y=Math.min(...rs.map(r=>r[1])),x2=Math.max(...rs.map(r=>r[2])),y2=Math.max(...rs.map(r=>r[3]));
+    return {glyphs,rect:[x,y,x2-x,y2-y]};
+  });
+}
+
+
+/* Collect picture boxes from a pdf.js operator list: raster images + clusters of vector drawing. */
+function findFigures(ol, vpT, OPS, U, textBoxes, W, H){
+  let ctm=[1,0,0,1,0,0];const st=[];const imgs=[];const paths=[];
+  const box=(m,x0,y0,x1,y1)=>{const pts=[[x0,y0],[x1,y0],[x0,y1],[x1,y1]].map(q=>U.applyTransform(U.applyTransform(q,m),vpT));const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);return [Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]};
+  const F=ol.fnArray,A=ol.argsArray;
+  for(let i=0;i<F.length;i++){const f=F[i],a=A[i];
+    if(f===OPS.save)st.push(ctm);else if(f===OPS.restore)ctm=st.pop()||ctm;
+    else if(f===OPS.transform)ctm=U.transform(ctm,a);
+    else if(f===OPS.paintFormXObjectBegin){st.push(ctm);if(a&&a[0])ctm=U.transform(ctm,a[0]);}
+    else if(f===OPS.paintFormXObjectEnd)ctm=st.pop()||ctm;
+    else if(f===OPS.paintImageXObject||f===OPS.paintInlineImageXObject||f===OPS.paintImageMaskXObject||f===OPS.paintImageXObjectRepeat||f===OPS.paintImageMaskXObjectRepeat)imgs.push(box(ctm,0,0,1,1));
+    else if(f===OPS.constructPath){const mm=a&&a[2];if(mm&&mm.length===4&&isFinite(mm[0]))paths.push(box(ctm,mm[0],mm[2],mm[1],mm[3]));}
+  }
+  // vector drawing clusters
+  const cand=paths.filter(b=>{const w=b[2]-b[0],h=b[3]-b[1];return !(w<3&&h>H*0.2)&&!(h<3&&w>W*0.2)&&w<W*0.6&&h<H*0.5&&(w>2||h>2)});
+  const gap=8;let cl=cand.map(b=>({b:[...b],n:1}));
+  let merged=true;
+  while(merged){merged=false;
+    for(let i=0;i<cl.length;i++)for(let j=i+1;j<cl.length;j++){const p=cl[i].b,q=cl[j].b;
+      if(p[0]-gap<=q[2]&&q[0]-gap<=p[2]&&p[1]-gap<=q[3]&&q[1]-gap<=p[3]){cl[i]={b:[Math.min(p[0],q[0]),Math.min(p[1],q[1]),Math.max(p[2],q[2]),Math.max(p[3],q[3])],n:cl[i].n+cl[j].n};cl.splice(j,1);j--;merged=true;}}}
+  const area=b=>Math.max(0,b[2]-b[0])*Math.max(0,b[3]-b[1]);
+  const inter=(p,q)=>area([Math.max(p[0],q[0]),Math.max(p[1],q[1]),Math.min(p[2],q[2]),Math.min(p[3],q[3])]);
+  const vec=cl.filter(c=>{const b=c.b,w=b[2]-b[0],h=b[3]-b[1];if(c.n<2||w<30||h<30||w>W*0.6)return false;
+    const tcov=textBoxes.reduce((s,t)=>s+inter(b,t),0)/area(b);return tcov<0.4;}).map(c=>c.b);
+  return imgs.concat(vec);
+}
+
+
+/* 破音字表：第 0 個是注音字型的預設念法，第 1、2… 個對應「破音1、破音2…」字型。後面是給語音引擎用的同音字（- 表示用原字）。 */
+const PHON_SRC='一:ㄧ-,ㄧˊ-,ㄧˋ-;不:ㄅㄨˋ-,ㄅㄨˊ-;長:ㄔㄤˊ常,ㄓㄤˇ掌;和:ㄏㄜˊ合,ㄏㄢˋ汗,ㄏㄜˋ賀,ㄏㄨㄛˋ貨,ㄏㄨˊ胡;得:ㄉㄜˊ德,˙ㄉㄜ的,ㄉㄟˇ-;子:˙ㄗ-,ㄗˇ紫;中:ㄓㄨㄥ忠,ㄓㄨㄥˋ眾;數:ㄕㄨˇ暑,ㄕㄨˋ樹,ㄕㄨㄛˋ朔;量:ㄌㄧㄤˊ良,ㄌㄧㄤˋ亮;個:˙ㄍㄜ-,ㄍㄜˋ各;挑:ㄊㄧㄠ-,ㄊㄧㄠˇ窕;了:˙ㄌㄜ-,ㄌㄧㄠˇ瞭;的:˙ㄉㄜ-,ㄉㄧˋ弟,ㄉㄧˊ敵;地:ㄉㄧˋ弟,˙ㄉㄜ的;著:˙ㄓㄜ-,ㄓㄠˊ-,ㄓㄨˋ注,ㄓㄨㄛˊ酌;看:ㄎㄢˋ-,ㄎㄢ刊;為:ㄨㄟˋ位,ㄨㄟˊ圍;好:ㄏㄠˇ-,ㄏㄠˋ號;少:ㄕㄠˇ-,ㄕㄠˋ紹;還:ㄏㄞˊ孩,ㄏㄨㄢˊ環;重:ㄓㄨㄥˋ眾,ㄔㄨㄥˊ蟲;行:ㄒㄧㄥˊ形,ㄏㄤˊ航;樂:ㄌㄜˋ勒,ㄩㄝˋ悅;覺:ㄐㄩㄝˊ決,ㄐㄧㄠˋ叫;教:ㄐㄧㄠˋ叫,ㄐㄧㄠ交;便:ㄅㄧㄢˋ變,ㄆㄧㄢˊ駢;空:ㄎㄨㄥ-,ㄎㄨㄥˋ控;相:ㄒㄧㄤ香,ㄒㄧㄤˋ象;分:ㄈㄣ-,ㄈㄣˋ份;差:ㄔㄚ插,ㄔㄚˋ岔,ㄔㄞ拆,ㄘ疵;只:ㄓˇ止,ㄓ隻;種:ㄓㄨㄥˇ腫,ㄓㄨㄥˋ眾;背:ㄅㄟˋ被,ㄅㄟ杯;倒:ㄉㄠˋ到,ㄉㄠˇ島;乾:ㄍㄢ甘,ㄑㄧㄢˊ前;場:ㄔㄤˇ廠,ㄔㄤˊ常;答:ㄉㄚˊ達,ㄉㄚ搭;應:ㄧㄥ英,ㄧㄥˋ映;處:ㄔㄨˋ觸,ㄔㄨˇ楚;降:ㄐㄧㄤˋ匠,ㄒㄧㄤˊ祥;調:ㄉㄧㄠˋ掉,ㄊㄧㄠˊ條;傳:ㄔㄨㄢˊ船,ㄓㄨㄢˋ賺;朝:ㄔㄠˊ潮,ㄓㄠ招;興:ㄒㄧㄥ星,ㄒㄧㄥˋ幸;間:ㄐㄧㄢ尖,ㄐㄧㄢˋ見;省:ㄕㄥˇ-,ㄒㄧㄥˇ醒;奇:ㄑㄧˊ齊,ㄐㄧ機;給:ㄍㄟˇ-,ㄐㄧˇ己;角:ㄐㄧㄠˇ腳,ㄐㄩㄝˊ決;載:ㄗㄞˋ在,ㄗㄞˇ宰;假:ㄐㄧㄚˇ甲,ㄐㄧㄚˋ架;曲:ㄑㄩ區,ㄑㄩˇ取;參:ㄘㄢ餐,ㄕㄣ深;盛:ㄕㄥˋ剩,ㄔㄥˊ成;將:ㄐㄧㄤ江,ㄐㄧㄤˋ匠;都:ㄉㄡ兜,ㄉㄨ嘟;似:ㄙˋ四,ㄕˋ是;尾:ㄨㄟˇ委,ㄧˇ以;塞:ㄙㄞ腮,ㄙㄞˋ賽,ㄙㄜˋ色;那:ㄋㄚˋ-,ㄋㄚˇ哪;大:ㄉㄚˋ-,ㄉㄞˋ代;吧:˙ㄅㄚ-,ㄅㄚ巴;過:ㄍㄨㄛˋ-,ㄍㄨㄛ鍋;正:ㄓㄥˋ-,ㄓㄥ征;供:ㄍㄨㄥ工,ㄍㄨㄥˋ共;片:ㄆㄧㄢˋ騙,ㄆㄧㄢ篇;鮮:ㄒㄧㄢ先,ㄒㄧㄢˇ險;落:ㄌㄨㄛˋ-,ㄌㄠˋ烙,ㄌㄚˋ辣;結:ㄐㄧㄝˊ節,ㄐㄧㄝ街;薄:ㄅㄛˊ博,ㄅㄠˊ雹;強:ㄑㄧㄤˊ牆,ㄑㄧㄤˇ搶,ㄐㄧㄤˋ匠;率:ㄕㄨㄞˋ帥,ㄌㄩˋ律;要:ㄧㄠˋ-,ㄧㄠ腰;啊:˙ㄚ-,ㄚ阿;發:ㄈㄚ-,ㄈㄚˇ法;更:ㄍㄥˋ-,ㄍㄥ耕;係:ㄒㄧˋ細,ㄐㄧˋ記;漂:ㄆㄧㄠˋ票,ㄆㄧㄠ飄;轉:ㄓㄨㄢˇ-,ㄓㄨㄢˋ賺;卷:ㄐㄩㄢˋ眷,ㄐㄩㄢˇ捲;剝:ㄅㄛ波,ㄅㄠ包;削:ㄒㄩㄝ靴,ㄒㄧㄠ消;露:ㄌㄨˋ路,ㄌㄡˋ漏';
+const PHON={},ZY2SUB={};
+PHON_SRC.split(';').forEach(e=>{const [c,rs]=e.split(':');PHON[c]=rs.split(',').map(r=>{const m=r.match(/^([˙]?[\u3105-\u3129]+[ˊˇˋ]?)(.*)$/);const sub=m[2]==='-'?c:m[2];if(sub!==c&&!ZY2SUB[m[1]])ZY2SUB[m[1]]=sub;return [m[1],sub]})});
+function phonVariant(fontName){const m=String(fontName||'').match(/(?:zuinn|zhuyin|zuyin|bopomofo|phonetic|注音|破音)[-_ ]?(?:ph|py)?(\d)/i);return m?Number(m[1]):0}
+
+/* 老師修改後的文字 → 字元串（字〔注音〕、〔請看圖〕、〔圖片〕） */
+function glyphsFromText(t){
+  const out=[];const re=/〔請看圖〕|〔圖片〕|([\u3400-\u9fff])〔([˙]?[\u3105-\u3129]+[ˊˇˋ]?)〕|[\s\S]/gu;let m;
+  while((m=re.exec(t))){
+    if(m[0]==='〔請看圖〕')out.push({ch:'\uFFFC',pic:'big'});
+    else if(m[0]==='〔圖片〕')out.push({ch:'\uFFFC',pic:'inline'});
+    else if(m[1])out.push({ch:m[1],zyEdit:m[2]});
+    else out.push(m[0]==='\n'?{ch:'\n',nl:true}:{ch:m[0]});
+  }
+  return out;
+}
+
+/* 字元串 → 一句一句。每句由 token 組成：a..b 是字元範圍，speak 是要念的文字。 */
+function tokenize(glyphs,opt){
+  const numbered=opt.numbered, edited=opt.edited;
+  const S=glyphs.map(g=>g.pic?'\uFFFC':(g.ch.length>1?'\uFFFD':g.ch)).join('');
+  const n=S.length,toks=[];
+  const WS=/[ \u3000\n\t]/;
+  const nextNS=j=>{while(j<n&&WS.test(S[j]))j++;return S[j]||''};
+  const prevNS=j=>{while(j>=0&&WS.test(S[j]))j--;return S[j]||''};
+  const push=(a,b,speak,x)=>toks.push(Object.assign({a,b,speak},x||{}));
+  let i=0;
+  let lead=0;while(lead<n&&WS.test(S[lead]))lead++;
+  if(lead)push(0,lead,'');i=lead;
+  if(!edited){
+    const rest=S.slice(lead);let m,len=0,num,kind;
+    if((m=rest.match(/^([一二三四五六七八九十]+)\s*[\.、．]/))){len=m[0].length;num=m[1];kind='大題'}
+    else if((m=rest.match(/^(\d{1,2})\s*[\.、．](?!\d)/))){len=m[0].length;num=m[1];kind='題'}
+    else if((m=rest.match(/^[（(]\s*(\d{1,2})\s*[)）]/))){len=m[0].length;num=m[1];kind='小題'}
+    else if((m=rest.match(/^[①-⑳]/))){len=1;num=String(m[0].charCodeAt(0)-0x245F);kind='小題'}
+    if(len){push(lead,lead+len,numbered?'第'+num+kind+'、':num+'、',{prefix:true});i=lead+len}
+  }
+  let lastHead=-1;
+  const atHead=j=>{let k=j-1;while(k>=0&&(S[k]===' '||S[k]==='\u3000'))k--;return k<0||S[k]==='\n'||(k<j-1)};
+  while(i<n){
+    const c=S[i],g=glyphs[i];const r=S.slice(i,i+40);let mm;
+    if(i>lead&&atHead(i)){
+      let hd=null;
+      if((mm=r.match(/^[（(]\s*(\d{1,2})\s*[)）]/)))hd=[mm[0].length,'第'+mm[1]+'小題、'];
+      else if((mm=r.match(/^([A-H])\s*[\.．]/)))hd=[mm[0].length,mm[1]+'、'];
+      else if((mm=r.match(/^(\d{1,2})\s*[\.．](?!\d)/)))hd=[mm[0].length,mm[1]+'、'];
+      if(hd){push(i,i+hd[0],hd[1],{head:true});i+=hd[0];lastHead=toks.length-1;continue}
+    }
+    if(/[①-⑳]/.test(c)&&i>lead){push(i,i+1,String(c.charCodeAt(0)-0x245F)+'、',{head:true});i++;lastHead=toks.length-1;continue}
+    if(g.pic==='big'){let j=i+1;for(;;){let k=j;while(k<n&&WS.test(S[k]))k++;if(k<n&&glyphs[k].pic==='big')j=k+1;else break}push(i,j,'請看圖',{big:true});i=j;continue}
+    if(g.pic){push(i,i+1,(/\d/.test(prevNS(i-1))&&/\d/.test(nextNS(i+1)))?'、':'',{pic:true});i++;continue}
+    if(c==='\n'){push(i,i+1,'',{nl:true});i++;continue}
+    if((mm=r.match(/^[（(][ \u3000]*[)）]/))){
+      const prevTok=toks[toks.length-1];const afterHead=prevTok&&(prevTok.head||prevTok.prefix)&&!S.slice(prevTok.b,i).trim();
+      push(i,i+mm[0].length,afterHead?'':'、括號、');i+=mm[0].length;continue}
+    if((mm=r.match(/^_{2,}/))){push(i,i+mm[0].length,'、空格、');i+=mm[0].length;continue}
+    let sp=c,x=null;
+    if(/[（()）「」『』\[\]【】]/.test(c))sp='';
+    else if(c==='/'||c==='／'){const p=prevNS(i-1),q=nextNS(i+1);sp=(!p||!q||/[)）(（\uFFFC]/.test(p+q))?'':'、還是、'}
+    else if(/[＋+]/.test(c))sp='加';
+    else if(/[＝=]/.test(c))sp='等於';
+    else if(/[-－−]/.test(c))sp=(/\d/.test(prevNS(i-1))&&/\d/.test(nextNS(i+1)))?'減':'';
+    else if(/[×✕]/.test(c))sp=(/\d/.test(prevNS(i-1))&&/\d/.test(nextNS(i+1)))?'乘':'叉';
+    else if(/[～~]/.test(c))sp=(/\d/.test(prevNS(i-1))&&/\d/.test(nextNS(i+1)))?'到':'';
+    else if(/[▲▼▶►◀*※❖]/.test(c))sp='';
+    else if(c==='°')sp='度';else if(c==='÷')sp='除以';
+    else if(/[ˇ✓✔]/.test(c))sp='勾';else if(/[□☐]/.test(c))sp='方格';
+    else if(/[○◯]/.test(c))sp=(/[○◯]/.test(S[i-1]||'')||/[○◯]/.test(S[i+1]||''))?'':'圈';
+    else if(/[◎●]/.test(c))sp='';
+    else if(/[?？]/.test(c))sp=(/[\u4e00-\u9fff]/.test(S[i+1]||'')&&!/[\u4e00-\u9fff]/.test(prevNS(i-1)))?'幾':'？';
+    else if(c===' '||c==='\u3000'||c==='\t')sp=(/\d/.test(prevNS(i-1))&&/\d/.test(nextNS(i+1)))?'、':'';
+    else if(c==='.')sp=(/\d/.test(S[i-1]||'')&&/\d/.test(S[i+1]||''))?'點':'';
+    else if(c===',')sp='，';
+    else if(c==='\uFFFD')sp=g.ch;
+    else if(g.zyEdit){const rd=PHON[c]&&PHON[c].find(q=>q[0]===g.zyEdit);sp=(c==='一'||c==='不')?c:(rd?rd[1]:(ZY2SUB[g.zyEdit]||c));x={zy:g.zyEdit}}
+    else if(g.v&&PHON[c]&&PHON[c][g.v]){const rd=PHON[c][g.v];sp=(c==='一'||c==='不')?c:rd[1];x={zy:rd[0]}}
+    push(i,i+1,sp,x);i++;
+  }
+  // 斷句：逗號、句號、問號、驚嘆號、分號；算式行、「答」「◎」開頭的行；圖片自成一句
+  const sents=[];let cur=[];
+  const end=()=>{if(cur.length){sents.push(cur);cur=[]}};
+  let lineStart=0;
+  for(let k=0;k<toks.length;k++){
+    const t=toks[k];
+    if(t.big){end();cur.push(t);end();continue}
+    if(t.nl){
+      const before=S.slice(lineStart,t.a);let e=t.b;while(e<n&&S[e]!=='\n')e++;const after=S.slice(t.b,e);lineStart=t.b;
+      cur.push(t);
+      if(edited||cur.some(x=>x.head)||/[＝=]/.test(before)||/[＝=]/.test(after)||/[^\s（(][)）][ \u3000]*$/.test(before)||/^[ \u3000]*[答◎]/.test(after)||/[：:][ \u3000]*$/.test(before))end();
+      continue;
+    }
+    if(t.head&&cur.some(x=>x.speak&&!x.prefix))end();
+    cur.push(t);
+    if(t.b-t.a===1&&/[，。？！；,!?;]/.test(S[t.a])&&t.speak!=='幾')end();
+  }
+  end();
+  const speakable=s=>/[\u3400-\u9fff\dA-Za-z\u3105-\u3129]/.test(s.map(t=>t.speak).join(''));
+  const prefixOnly=s=>s.every(t=>t.prefix||t.head||!t.speak);
+  const out=[];let carry=[];
+  for(const s of sents){if(!speakable(s)||prefixOnly(s)){carry=carry.concat(s);continue}out.push(carry.concat(s));carry=[]}
+  if(carry.length){if(out.length)out[out.length-1]=out[out.length-1].concat(carry);else out.push(carry)}
+  return out.map(ts=>{let sp='';for(const t of ts){let s=t.speak;if(!sp||/[、，。？！；：]$/.test(sp))s=s.replace(/^、+/,'');t.s0=sp.length;sp+=s;t.s1=sp.length}return {toks:ts,speak:sp.replace(/、+$/,'')}});
+}
+/* 修改念法的預填文字：一句一行 */
+function editTextOf(glyphs,sents){
+  return sents.map(s=>s.toks.map(t=>{
+    if(t.big)return'〔請看圖〕';if(t.pic)return'〔圖片〕';
+    if(t.zy)return glyphs[t.a].ch+'〔'+t.zy+'〕';
+    return t.speak;
+  }).join('').replace(/^、+/,'').replace(/、+$/,'')).join('\n');
+}
+
+
+
+const $=id=>document.getElementById(id);
+const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const synth=window.speechSynthesis;
+const state={pdf:null,fileKey:'',blocks:[],cur:null,speaking:false,token:0,rep:store.get('rep',1),edits:{},nowTok:null};
+
+/* ---------- settings ---------- */
+const RATES=[0.5,0.6,0.7,0.8,0.9,1,1.1,1.2,1.3,1.5];
+let rateIdx=Math.max(0,RATES.indexOf(store.get('rateV',0.9)));if(rateIdx<0)rateIdx=4;
+function showRate(){const r=RATES[rateIdx];$('rateVal').innerHTML=r.toFixed(1)+'×<small>'+(r<0.75?'很慢':r<0.85?'慢':r<1.05?'適中':r<1.25?'快':'很快')+'</small>';$('slower').disabled=rateIdx===0;$('faster').disabled=rateIdx===RATES.length-1}
+function stepRate(d){rateIdx=Math.min(RATES.length-1,Math.max(0,rateIdx+d));store.set('rateV',RATES[rateIdx]);showRate()}
+$('slower').addEventListener('click',()=>stepRate(-1));$('faster').addEventListener('click',()=>stepRate(1));showRate();
+document.querySelectorAll('[data-rep]').forEach(b=>{
+  b.setAttribute('aria-pressed',String(Number(b.dataset.rep)===state.rep));
+  b.addEventListener('click',()=>{state.rep=Number(b.dataset.rep);store.set('rep',state.rep);document.querySelectorAll('[data-rep]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)))});
+});
+for(const id of ['numRead','showBoxes']){const el=$(id);el.checked=store.get(id,el.checked);el.addEventListener('change',()=>{store.set(id,el.checked);if(id==='showBoxes')applyBoxes();else{state.blocks.forEach(rebuild);stopSpeech();paintAll()}})}
+function applyBoxes(){$('pagesInner').classList.toggle('show-boxes',$('showBoxes').checked)}applyBoxes();
+$('moreBtn').addEventListener('click',()=>{const d=$('desk');d.classList.toggle('more');$('moreBtn').setAttribute('aria-expanded',String(d.classList.contains('more')))});
+
+/* ---------- voices: zh-TW first, natural/neural voices preferred ---------- */
+let voices=[];
+function loadVoices(){
+  if(!synth){$('voiceWarn').hidden=false;$('voiceWarn').textContent='這個瀏覽器不支援語音朗讀，請改用 Chrome、Edge 或 Safari。';return}
+  const all=synth.getVoices();if(!all.length)return;
+  const lang=v=>{const l=v.lang.replace('_','-').toLowerCase();return l==='zh-tw'||l.startsWith('zh-hant')?0:l==='zh-hk'?2:(l.startsWith('zh')||l.startsWith('cmn'))?1:9};
+  const q=v=>/natural|neural|premium|enhanced|增強|優化/i.test(v.name)?0:/google/i.test(v.name)?1:2;
+  voices=all.filter(v=>lang(v)<9).sort((a,b)=>lang(a)-lang(b)||q(a)-q(b));
+  const sel=$('voice');sel.innerHTML='';
+  voices.forEach(v=>{const o=document.createElement('option');o.value=v.name;o.textContent=v.name.replace(/^Microsoft |^Google /,'')+(q(v)===0?'（推薦）':'');sel.appendChild(o)});
+  if(!voices.length){const o=document.createElement('option');o.textContent='系統預設';sel.appendChild(o);$('voiceWarn').hidden=false}
+  else{$('voiceWarn').hidden=true;const saved=store.get('voice','');if(voices.some(v=>v.name===saved))sel.value=saved}
+}
+if(synth){loadVoices();synth.addEventListener?.('voiceschanged',loadVoices);setTimeout(loadVoices,800)}else loadVoices();
+$('voice').addEventListener('change',e=>store.set('voice',e.target.value));
+
+/* ---------- PDF ---------- */
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+let renderToken=0;
+function rebuild(b){
+  const e=state.edits[b.key];
+  if(e!=null){b.edited=true;b.g=glyphsFromText(e);b.sents=tokenize(b.g,{edited:true})}
+  else{b.edited=false;b.g=b.glyphs;b.sents=tokenize(b.g,{numbered:$('numRead').checked})}
+  b.glyphSent=new Map();b.sents.forEach((s,si)=>s.toks.forEach(t=>{for(let k=t.a;k<t.b;k++)b.glyphSent.set(k,si)}));
+}
+async function openPdf(data,name){
+  stopSpeech();
+  const inner=$('pagesInner');inner.innerHTML='<div class="loading">正在讀取考卷…</div>';
+  $('fileName').textContent=name;
+  state.fileKey='edits3:'+name+':'+data.byteLength;
+  state.edits=window.__edits||{};
+  try{state.pdf=await pdfjsLib.getDocument({data,isEvalSupported:false,verbosity:0}).promise}
+  catch(e){inner.innerHTML='<div class="empty"><div class="card"><h2>打不開這個檔案</h2><p>請確認是 PDF 檔，而且沒有設定密碼。</p></div></div>';return}
+  let ordered=false;try{const md=await state.pdf.getMetadata();ordered=/baodu-order/.test((md&&md.info&&md.info.Keywords)||'')}catch(e){}
+  state.blocks=[];state.cur=null;paintAll();
+  const tok=++renderToken;inner.innerHTML='';
+  for(let p=1;p<=state.pdf.numPages;p++){
+    const page=await state.pdf.getPage(p);if(tok!==renderToken)return;
+    const vp=page.getViewport({scale:1});
+    const wrap=document.createElement('div');wrap.className='page';wrap.style.aspectRatio=vp.width+' / '+vp.height;
+    const canvas=document.createElement('canvas');wrap.appendChild(canvas);
+    const hl=document.createElement('div');hl.className='hl';wrap.appendChild(hl);
+    inner.appendChild(wrap);
+    const [tc,ol]=await Promise.all([page.getTextContent(),ordered?null:page.getOperatorList().catch(()=>null)]);
+    const fv={};
+    const items=tc.items.map(it=>{
+      if(!(it.fontName in fv)){let n='';try{n=page.commonObjs.get(it.fontName).name}catch(e){}fv[it.fontName]=phonVariant(n)}
+      const t=pdfjsLib.Util.transform(vp.transform,it.transform);
+      return {s:it.str,v:fv[it.fontName],x:t[4],base:t[5],fs:Math.hypot(t[2],t[3]),w:it.width};
+    });
+    let figs=[];
+    if(ol){try{const tb=items.filter(i=>i.s&&i.s.trim()).map(i=>[i.x,i.base-i.fs*0.9,i.x+i.w,i.base+i.fs*0.2]);figs=findFigures(ol,vp.transform,pdfjsLib.OPS,pdfjsLib.Util,tb,vp.width,vp.height)}catch(e){}}
+    const bl=ordered?buildBlocksOrdered(items,vp.width,vp.height):buildBlocks(items,figs,vp.width,vp.height);
+    if(!bl.length){const n=document.createElement('div');n.className='no-text';n.textContent='這一頁沒有可以念的文字，請告訴老師。';wrap.appendChild(n)}
+    bl.forEach((b,i)=>{
+      const bi=state.blocks.length;
+      const el=document.createElement('button');el.type='button';el.className='blk';
+      const pad=0.006;
+      el.style.left=((b.rect[0]-pad)*100)+'%';el.style.top=((b.rect[1]-pad)*100)+'%';
+      el.style.width=((b.rect[2]+pad*2)*100)+'%';el.style.height=((b.rect[3]+pad*2)*100)+'%';
+      const blk={page:p,key:p+'-'+i,glyphs:b.glyphs,rect:b.rect,el,wrap,hl};
+      rebuild(blk);
+      el.setAttribute('aria-label','念這一題：'+blk.sents.map(s=>s.speak).join('').slice(0,40));
+      el.addEventListener('click',e=>clickBlock(bi,e));
+      wrap.appendChild(el);
+      state.blocks.push(blk);
+    });
+    renderPage(page,canvas,wrap);
+  }
+}
+async function renderPage(page,canvas,wrap){
+  const w=wrap.clientWidth||800;const dpr=Math.min(window.devicePixelRatio||1,2);
+  const vp0=page.getViewport({scale:1});const vp=page.getViewport({scale:w*dpr/vp0.width});
+  canvas.width=Math.round(vp.width);canvas.height=Math.round(vp.height);canvas.dataset.w=w;canvas._page=page;
+  try{await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise}catch(e){}
+}
+let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{document.querySelectorAll('.page canvas').forEach(c=>{const w=c.parentNode.clientWidth;if(c._page&&Math.abs(w-Number(c.dataset.w))/w>0.2)renderPage(c._page,c,c.parentNode)})},300)});
+
+/* ---------- choosing a sentence ---------- */
+function clickBlock(bi,e){
+  const b=state.blocks[bi];let si=0;
+  if(e.detail===0||b.edited){si=(state.cur&&state.cur.b===bi)?Math.min(state.cur.s+1,b.sents.length-1):0}
+  else{
+    const r=b.wrap.getBoundingClientRect();const px=(e.clientX-r.left)/r.width,py=(e.clientY-r.top)/r.height;
+    let best=Infinity;
+    b.g.forEach((g,k)=>{if(!g.r||!b.glyphSent.has(k))return;const dx=Math.max(g.r[0]-px,0,px-g.r[2]),dy=(Math.max(g.r[1]-py,0,py-g.r[3]))*1.4;const d=dx*dx+dy*dy;if(d<best){best=d;si=b.glyphSent.get(k)}});
+  }
+  go(bi,si);
+}
+function go(bi,si){
+  if(bi<0||bi>=state.blocks.length)return;
+  state.cur={b:bi,s:si};closeEdit();paintAll();scrollToCur();speakCur();
+}
+function nextPos(){const c=state.cur;if(!c)return{b:0,s:0};const b=state.blocks[c.b];if(c.s<b.sents.length-1)return{b:c.b,s:c.s+1};if(c.b<state.blocks.length-1)return{b:c.b+1,s:0};return null}
+function prevPos(){const c=state.cur;if(!c)return{b:0,s:0};if(c.s>0)return{b:c.b,s:c.s-1};if(c.b>0)return{b:c.b-1,s:state.blocks[c.b-1].sents.length-1};return{b:0,s:0}}
+function scrollToCur(){
+  const b=state.blocks[state.cur.b];const s=b.sents[state.cur.s];
+  let top=b.rect[1],bot=b.rect[1]+b.rect[3];
+  if(!b.edited){const rs=s.toks.flatMap(t=>b.g.slice(t.a,t.b)).filter(g=>g.r);if(rs.length){top=Math.min(...rs.map(g=>g.r[1]));bot=Math.max(...rs.map(g=>g.r[3]))}}
+  const wr=b.wrap.getBoundingClientRect(),pr=$('pages').getBoundingClientRect();
+  const y0=wr.top+top*wr.height,y1=wr.top+bot*wr.height;
+  if(y0<pr.top+30||y1>pr.bottom-30)$('pages').scrollBy({top:(y0+y1)/2-(pr.top+pr.height/2),behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+}
+
+/* ---------- painting: sentence = light, word being read = darker ---------- */
+function runs(glyphs){
+  const out=[];let cur=null;
+  for(const g of glyphs){
+    if(!g.r){continue}
+    if(g.pic){out.push({r:[...g.r],pic:true});cur=null;continue}
+    const cy=(g.r[1]+g.r[3])/2,h=g.r[3]-g.r[1];
+    if(cur&&Math.abs(cy-cur.cy)<h*0.5&&g.r[0]-cur.r[2]<h*0.9){cur.r[0]=Math.min(cur.r[0],g.r[0]);cur.r[1]=Math.min(cur.r[1],g.r[1]);cur.r[2]=Math.max(cur.r[2],g.r[2]);cur.r[3]=Math.max(cur.r[3],g.r[3])}
+    else{cur={r:[...g.r],cy};out.push(cur)}
+  }
+  return out;
+}
+function boxDiv(r,cls,pad){const d=document.createElement('div');d.className=cls;const px=pad||0.002;d.style.left=((r[0]-px)*100)+'%';d.style.top=((r[1]-px)*100)+'%';d.style.width=((r[2]-r[0]+px*2)*100)+'%';d.style.height=((r[3]-r[1]+px*2)*100)+'%';return d}
+let litLayer=null;
+function paintExam(){
+  document.querySelectorAll('.hl').forEach(h=>h.innerHTML='');
+  document.querySelectorAll('.blk.active').forEach(e=>e.classList.remove('active'));
+  if(!state.cur)return;
+  const b=state.blocks[state.cur.b],s=b.sents[state.cur.s];
+  b.el.classList.add('active');litLayer=b.hl;
+  if(b.edited){b.hl.appendChild(boxDiv([b.rect[0],b.rect[1],b.rect[0]+b.rect[2],b.rect[1]+b.rect[3]],'s',0.004));return}
+  for(const r of runs(s.toks.flatMap(t=>b.g.slice(t.a,t.b))))b.hl.appendChild(boxDiv(r.r,r.pic?'p':'s',r.pic?0.003:0.002));
+}
+function paintNowExam(t){
+  if(!litLayer)return;litLayer.querySelectorAll('.n').forEach(d=>d.remove());
+  if(!t||!state.cur)return;const b=state.blocks[state.cur.b];if(b.edited)return;
+  for(const r of runs(b.g.slice(t.a,t.b)))if(!r.pic)litLayer.appendChild(boxDiv(r.r,'n',0.002));
+}
+function esc(t){return t.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function tokHTML(b,t){
+  if(t.big)return'<span class="pic">請看圖</span>';
+  let h='';for(let k=t.a;k<t.b;k++){const g=b.g[k];
+    if(g.pic)h+='<span class="pic">圖</span>';
+    else if(g.nl)h+='';
+    else if(t.zy&&k===t.a)h+='<ruby>'+esc(g.ch)+'<rt>'+esc(t.zy)+'</rt></ruby>';
+    else h+=esc(g.ch);}
+  return h;
+}
+function paintPanel(){
+  const box=$('nowText');
+  if(!state.cur){box.innerHTML='<span class="placeholder">點考卷上任何一句，就只念那一句，念到逗號或句號就停。要念下一句，再點一次，或按「念下一句」。</span>';$('nowWhere').textContent='點考卷上的句子開始念';$('editedTag').hidden=true;return}
+  const b=state.blocks[state.cur.b];
+  $('nowWhere').textContent='第 '+b.page+' 頁　這題第 '+(state.cur.s+1)+' 句，共 '+b.sents.length+' 句';
+  $('editedTag').hidden=!b.edited;
+  box.innerHTML=b.sents.map((s,si)=>'<span class="sent'+(si===state.cur.s?' on':'')+'" data-s="'+si+'">'+s.toks.map((t,ti)=>'<span class="tk" data-t="'+ti+'">'+tokHTML(b,t)+'</span>').join('')+'</span>').join('');
+  const on=box.querySelector('.sent.on');if(on){const br=box.getBoundingClientRect(),r=on.getBoundingClientRect();if(r.top<br.top||r.bottom>br.bottom)box.scrollTop+=r.top-br.top-8}
+}
+$('nowText').addEventListener('click',e=>{const s=e.target.closest('.sent');if(s&&state.cur)go(state.cur.b,Number(s.dataset.s))});
+function paintNowPanel(ti){$('nowText').querySelectorAll('.tk.reading').forEach(e=>e.classList.remove('reading'));if(ti==null)return;const el=$('nowText').querySelector('.sent.on .tk[data-t="'+ti+'"]');if(el)el.classList.add('reading')}
+function paintAll(){paintExam();paintPanel();setPlayUI()}
+function setNow(ti){if(state.nowTok===ti)return;state.nowTok=ti;const s=curSent();paintNowExam(ti==null||!s?null:s.toks[ti]);paintNowPanel(ti)}
+function curSent(){return state.cur?state.blocks[state.cur.b].sents[state.cur.s]:null}
+
+/* ---------- speaking one sentence ---------- */
+function setPlayUI(){
+  $('playLabel').textContent=state.speaking?'停止':(state.cur?'念下一句':'開始念');
+  $('playIcon').innerHTML=state.speaking?'<path d="M6 6h12v12H6z"/>':'<path d="M7 4v16l13-8z"/>';
+}
+function weight(c){return /[㐀-鿿ㄅ-ㄩ\d]/.test(c)?1:/[、]/.test(c)?1.1:/[，,；;]/.test(c)?1.5:/[。？！?!]/.test(c)?1.8:0.25}
+function stopSpeech(){state.token++;synth&&synth.cancel();state.speaking=false;cancelAnimationFrame(raf);setNow(null);setPlayUI()}
+let raf=0;
+function speakCur(){
+  stopSpeech();const s=curSent();if(!s||!synth)return;
+  if(!/[㐀-鿿\dA-Za-z]/.test(s.speak))return;
+  const tok=state.token;state.speaking=true;setPlayUI();
+  let rep=0;
+  const once=()=>{
+    if(tok!==state.token)return;
+    const u=new SpeechSynthesisUtterance(s.speak);state.u=u;
+    const v=voices.find(v=>v.name===$('voice').value);if(v){u.voice=v;u.lang=v.lang}else u.lang='zh-TW';
+    const rate=RATES[rateIdx];u.rate=rate;u.pitch=1;
+    const unit=0.235/rate;let anchorOff=0,anchorT=0,cap=Infinity,started=false;
+    const findTok=off=>{let k=s.toks.findIndex(t=>t.speak&&off>=t.s0&&off<t.s1);if(k<0)k=s.toks.findIndex(t=>t.speak&&t.s0>=off);return k<0?null:k};
+    const loop=()=>{
+      if(tok!==state.token)return;
+      let el=(performance.now()-anchorT)/1000,off=anchorOff;
+      while(off<s.speak.length&&el>0){el-=weight(s.speak[off])*unit;if(el>0)off++}
+      off=Math.min(off,cap,s.speak.length-1);setNow(findTok(off));raf=requestAnimationFrame(loop);
+    };
+    u.onstart=()=>{if(tok!==state.token)return;started=true;anchorT=performance.now();anchorOff=0;cancelAnimationFrame(raf);loop()};
+    u.onboundary=e=>{if(tok!==state.token||(e.name&&e.name!=='word'))return;anchorOff=e.charIndex;anchorT=performance.now();cap=e.charLength?e.charIndex+e.charLength-1:Infinity};
+    u.onend=()=>{if(tok!==state.token)return;cancelAnimationFrame(raf);rep++;
+      if(rep<state.rep){setNow(null);setTimeout(once,650);return}
+      state.speaking=false;setNow(null);setPlayUI()};
+    u.onerror=e=>{if(tok!==state.token||e.error==='interrupted'||e.error==='canceled')return;u.onend()};
+    setTimeout(()=>{if(tok===state.token)synth.speak(u)},50);
+  };
+  once();
+}
+$('playBtn').addEventListener('click',()=>{if(state.speaking){stopSpeech();return}const p=nextPos();if(p)go(p.b,p.s)});
+$('prevBtn').addEventListener('click',()=>{const p=prevPos();go(p.b,p.s)});
+$('againBtn').addEventListener('click',()=>{if(state.cur)speakCur();else go(0,0)});
+document.addEventListener('keydown',e=>{
+  if(/TEXTAREA|INPUT|SELECT/.test(document.activeElement.tagName)||e.metaKey||e.ctrlKey||e.altKey)return;
+  if(e.key===' '||e.key==='ArrowRight'||e.key==='ArrowDown'){e.preventDefault();if(e.key===' '){$('playBtn').click()}else{const p=nextPos();if(p)go(p.b,p.s)}}
+  else if(e.key==='ArrowLeft'||e.key==='ArrowUp'){e.preventDefault();$('prevBtn').click()}
+  else if(e.key==='r'||e.key==='R'){$('againBtn').click()}
+  else if(e.key==='-'||e.key==='_'){stepRate(-1)}
+  else if(e.key==='+'||e.key==='='){stepRate(1)}
+});
+
+/* ---------- editing ---------- */
+function closeEdit(){$('editWrap').hidden=true;$('nowText').hidden=false;$('editBtn').textContent='修改念法'}
+$('editBtn').addEventListener('click',()=>{
+  if(!state.cur){return}
+  if(!$('editWrap').hidden){closeEdit();return}
+  stopSpeech();const b=state.blocks[state.cur.b];
+  $('editArea').value=state.edits[b.key]!=null?state.edits[b.key]:editTextOf(b.g,b.sents);
+  $('editWrap').hidden=false;$('nowText').hidden=true;$('editBtn').textContent='取消';$('editArea').focus();
+});
+function applyEdit(val){const b=state.blocks[state.cur.b];if(val==null)delete state.edits[b.key];else state.edits[b.key]=val;store.set(state.fileKey,state.edits);rebuild(b);state.cur.s=0;closeEdit();paintAll()}
+$('saveEdit').addEventListener('click',()=>applyEdit($('editArea').value.trim()));
+$('resetEdit').addEventListener('click',()=>applyEdit(null));
+
+/* ---------- file input + drag & drop ---------- */
+$('pickBtn').addEventListener('click',()=>$('fileInput').click());
+$('fileInput').addEventListener('change',async e=>{const f=e.target.files[0];if(f)openPdf(new Uint8Array(await f.arrayBuffer()),f.name);e.target.value=''});
+const pagesEl=$('pages');let dragN=0,dropEl=null;
+pagesEl.addEventListener('dragenter',e=>{e.preventDefault();if(dragN++===0){dropEl=document.createElement('div');dropEl.className='drop';dropEl.textContent='放開即可載入考卷';pagesEl.appendChild(dropEl)}});
+pagesEl.addEventListener('dragover',e=>e.preventDefault());
+pagesEl.addEventListener('dragleave',()=>{if(--dragN<=0){dragN=0;dropEl?.remove()}});
+pagesEl.addEventListener('drop',async e=>{e.preventDefault();dragN=0;dropEl?.remove();const f=[...e.dataTransfer.files].find(f=>/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name));if(f)openPdf(new Uint8Array(await f.arrayBuffer()),f.name)});
+
+function b64d(k){return Uint8Array.from(atob(k.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0))}
+async function unpackExam(buf,k){
+  const u=new Uint8Array(buf);if(new TextDecoder().decode(u.slice(0,4))!=='BDX1')throw 0;
+  const key=await crypto.subtle.importKey('raw',b64d(k),'AES-GCM',false,['decrypt']);
+  const p=new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:u.slice(4,16)},key,u.slice(16)));
+  const hl=new DataView(p.buffer).getUint32(0);
+  return {hdr:JSON.parse(new TextDecoder().decode(p.slice(4,4+hl))),pdf:p.slice(4+hl)};
+}
+(()=>{
+  document.body.classList.add('student');
+  const inner=$('pagesInner'),k=(location.hash.match(/k=([\w-]+)/)||[])[1];
+  const card=h=>{inner.innerHTML='<div class="empty"><div class="card">'+h+'</div></div>'};
+  if(!k){card('<h2>請等老師開始考試</h2><p>請老師用開考的 QR code 開啟這一頁。</p>');return}
+  card('<h2>準備好了嗎？</h2><p><button class="btn primary" id="pickExam" style="font-size:22px;padding:16px 32px">選擇考卷檔</button></p><input type="file" id="exFile" hidden>');
+  $('pickExam').onclick=()=>$('exFile').click();
+  $('exFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;
+    try{const {hdr,pdf}=await unpackExam(await f.arrayBuffer(),k);
+      const ri=RATES.indexOf(hdr.rate);if(ri>=0){rateIdx=ri;showRate()}
+      if(hdr.rep===1||hdr.rep===2)state.rep=hdr.rep;
+      window.__edits=hdr.edits||{};openPdf(pdf,hdr.name||'exam')}
+    catch(err){card('<h2>這個檔案打不開</h2><p>請告訴老師，確認考卷檔和 QR code 是同一次打包的。</p>')}};
+})();
+</script>
+
+</body></html>
