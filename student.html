@@ -125,6 +125,7 @@ body.student .desk{border-left:none;border-top:1px solid var(--line);padding:10p
 body.student .transport{grid-template-columns:1fr}
 body.student .tbtn{flex-direction:row;gap:10px;min-height:64px;font-size:20px;font-weight:700}
 body.student .show-boxes .blk{border-color:transparent}
+.blk.fig{z-index:3}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 
@@ -229,6 +230,22 @@ function buildBlocks(items, images, W, H){
   // pictures: small ones sitting on a text row become inline "〔圖片〕"; the rest become their own "〔請看圖〕" line
   const bigImgs=[];
   const imgs=(images||[]).filter(b=>{const w=b[2]-b[0],h=b[3]-b[1];return w>6&&h>6&&w*h<W*H*0.8&&w*h>fsMed*fsMed*0.8});
+const figBlocks=[];
+  {const big=imgs.filter(b=>(b[2]-b[0])>fsMed*3&&(b[3]-b[1])>fsMed*3);const lab=new Set();
+   for(const b of big){const inn=its.filter(i=>!lab.has(i)&&(i.x+i.x2)/2>=b[0]&&(i.x+i.x2)/2<=b[2]&&(i.top+i.bot)/2>=b[1]&&(i.top+i.bot)/2<=b[3]);
+     if(inn.length&&inn.length<=15)inn.forEach(i=>lab.add(i))}
+   if(lab.size){its=its.filter(i=>!lab.has(i));
+     let L=[];
+     for(const r of rowsOf([...lab])){let cur=null;
+       for(const i of r.items){if(!cur||i.x-cur.x2>r.fs*1.5){cur={items:[],x2:i.x2,fs:r.fs};L.push(cur)}cur.items.push(i);cur.x2=Math.max(cur.x2,i.x2)}}
+     const box=g=>{g.x0=Math.min(...g.items.map(i=>i.x));g.x1=Math.max(...g.items.map(i=>i.x2));g.y0=Math.min(...g.items.map(i=>i.top));g.y1=Math.max(...g.items.map(i=>i.bot))};
+     L.forEach(box);
+     for(let m=true;m;){m=false;L.sort((p,q)=>p.y0-q.y0);
+       for(let i=0;i<L.length&&!m;i++)for(let j=i+1;j<L.length&&!m;j++){const p=L[i],q=L[j];
+         if(Math.abs((p.x0+p.x1)/2-(q.x0+q.x1)/2)<=p.fs*0.7&&q.y0-p.y1>=-p.fs*0.2&&q.y0-p.y1<=p.fs*0.8){p.items=p.items.concat(q.items);p.fs=Math.max(p.fs,q.fs);box(p);L.splice(j,1);m=true}}}
+     for(const sg of L){const j=join(sg.items);const rs=j.gl.filter(g=>g.r).map(g=>g.r);if(!rs.length)continue;
+       const x0=Math.min(...rs.map(q=>q[0])),y0=Math.min(...rs.map(q=>q[1])),x1=Math.max(...rs.map(q=>q[2])),y1=Math.max(...rs.map(q=>q[3]));
+       figBlocks.push({fig:true,glyphs:j.gl.map(g=>g.r?{...g,r:[g.r[0]/W,g.r[1]/H,g.r[2]/W,g.r[3]/H]}:g),rect:[x0/W,y0/H,(x1-x0)/W,(y1-y0)/H]})}}}
   const rows0=rowsOf(its);
   for(const b of imgs){
     const h=b[3]-b[1],cy=(b[1]+b[3])/2;
@@ -281,11 +298,12 @@ function buildBlocks(items, images, W, H){
     if(!cur||isStart||l.col!==cur.col||(cur.col==='F'&&!l.img&&l.top-cur.bot>l.fs*2)){cur={lines:[],col:l.col};blocks.push(cur);}
     cur.lines.push(l);
   }
-  return blocks.filter(b=>b.lines.some(l=>!l.img)).map(b=>{
+  const mainBlocks=blocks.filter(b=>b.lines.some(l=>!l.img)).map(b=>{
     const x=Math.min(...b.lines.map(l=>l.x)),x2=Math.max(...b.lines.map(l=>l.x2)),top=Math.min(...b.lines.map(l=>l.top)),bot=Math.max(...b.lines.map(l=>l.bot));
     const glyphs=[];b.lines.forEach((l,k)=>{if(k)glyphs.push({ch:'\n',nl:true});for(const g of l.gl)glyphs.push(g.r?{...g,r:[g.r[0]/W,g.r[1]/H,g.r[2]/W,g.r[3]/H]}:g)});
     return {glyphs,rect:[x/W,top/H,(x2-x)/W,(bot-top)/H]};
   });
+  return mainBlocks.concat(figBlocks);
 }
 
 
@@ -509,6 +527,10 @@ function loadVoices(){
 }
 if(synth){loadVoices();synth.addEventListener?.('voiceschanged',loadVoices);setTimeout(loadVoices,800)}else loadVoices();
 $('voice').addEventListener('change',e=>store.set('voice',e.target.value));
+function pickVoice(pref){const f=re=>voices.find(x=>re.test(x.name));
+  const esc=t=>t.replace(/[.*+?^${}()|\[\]\\]/g,'\\$&');
+  const v=(pref&&f(new RegExp(esc(pref),'i')))||f(/雅婷|Ya-?Ting/i);
+  if(v){store.set('voice',v.name);$('voice').value=v.name}return v}
 
 /* ---------- PDF ---------- */
 pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -550,12 +572,12 @@ async function openPdf(data,name){
     if(!bl.length){const n=document.createElement('div');n.className='no-text';n.textContent='這一頁沒有可以念的文字，請告訴老師。';wrap.appendChild(n)}
     bl.forEach((b,i)=>{
       const bi=state.blocks.length;
-      const el=document.createElement('button');el.type='button';el.className='blk';
-      const pad=0.006;
+      const el=document.createElement('button');el.type='button';el.className='blk'+(b.fig?' fig':'');
+      const pad=b.fig?0.014:0.006;
       el.style.left=((b.rect[0]-pad)*100)+'%';el.style.top=((b.rect[1]-pad)*100)+'%';
       el.style.width=((b.rect[2]+pad*2)*100)+'%';el.style.height=((b.rect[3]+pad*2)*100)+'%';
       const blk={page:p,key:p+'-'+i,glyphs:b.glyphs,rect:b.rect,el,wrap,hl};
-      rebuild(blk);
+      rebuild(blk);if(!blk.sents.length)return;
       el.setAttribute('aria-label','念這一題：'+blk.sents.map(s=>s.speak).join('').slice(0,40));
       el.addEventListener('click',e=>clickBlock(bi,e));
       wrap.appendChild(el);
@@ -667,9 +689,9 @@ function speakCur(){
   const once=()=>{
     if(tok!==state.token)return;
     const u=new SpeechSynthesisUtterance(s.speak);state.u=u;
-    const v=voices.find(v=>v.name===$('voice').value);if(v){u.voice=v;u.lang=v.lang}else u.lang='zh-TW';
+    const v=pickVoice(window.__voicePref)||voices.find(v=>v.name===$('voice').value);if(v){u.voice=v;u.lang=v.lang}else u.lang='zh-TW';
     const rate=RATES[rateIdx];u.rate=rate;u.pitch=1;
-    const unit=0.235/rate;let anchorOff=0,anchorT=0,cap=Infinity,started=false;
+    const ck='unit:'+(u.voice?u.voice.name:'d')+':'+rate;const unit=store.get(ck,0.235/rate);let anchorOff=0,anchorT=0,cap=Infinity,started=false,t0=0;const bseen=new Set();const totW=Array.from(s.speak).reduce((a,c)=>a+weight(c),0)||1;
     const findTok=off=>{let k=s.toks.findIndex(t=>t.speak&&off>=t.s0&&off<t.s1);if(k<0)k=s.toks.findIndex(t=>t.speak&&t.s0>=off);return k<0?null:k};
     const loop=()=>{
       if(tok!==state.token)return;
@@ -677,13 +699,13 @@ function speakCur(){
       while(off<s.speak.length&&el>0){el-=weight(s.speak[off])*unit;if(el>0)off++}
       off=Math.min(off,cap,s.speak.length-1);setNow(findTok(off));raf=requestAnimationFrame(loop);
     };
-    u.onstart=()=>{if(tok!==state.token)return;started=true;anchorT=performance.now();anchorOff=0;cancelAnimationFrame(raf);loop()};
-    u.onboundary=e=>{if(tok!==state.token||(e.name&&e.name!=='word'))return;anchorOff=e.charIndex;anchorT=performance.now();cap=e.charLength?e.charIndex+e.charLength-1:Infinity};
-    u.onend=()=>{if(tok!==state.token)return;cancelAnimationFrame(raf);rep++;
+    u.onstart=()=>{if(tok!==state.token)return;started=true;anchorT=performance.now();t0=anchorT;anchorOff=0;cancelAnimationFrame(raf);loop()};
+    u.onboundary=e=>{if(tok!==state.token||(e.name&&e.name!=='word'))return;bseen.add(e.charIndex);if(bseen.size<3||e.charIndex<anchorOff)return;anchorOff=e.charIndex;anchorT=performance.now();cap=e.charLength?e.charIndex+e.charLength-1:Infinity};
+    u.onend=()=>{if(tok!==state.token)return;cancelAnimationFrame(raf);if(t0){const m=(performance.now()-t0)/1000/totW;if(m>unit*0.4&&m<unit*2.5)store.set(ck,unit*0.5+m*0.5)}rep++;
       if(rep<state.rep){setNow(null);setTimeout(once,650);return}
       state.speaking=false;setNow(null);setPlayUI()};
     u.onerror=e=>{if(tok!==state.token||e.error==='interrupted'||e.error==='canceled')return;u.onend()};
-    setTimeout(()=>{if(tok===state.token)synth.speak(u)},50);
+    setTimeout(()=>{if(tok!==state.token)return;synth.speak(u);if(!started){anchorT=performance.now()+350;anchorOff=0;cancelAnimationFrame(raf);loop()}},50);
   };
   once();
 }
@@ -734,13 +756,15 @@ async function unpackExam(buf,k){
   const inner=$('pagesInner'),k=(location.hash.match(/k=([\w-]+)/)||[])[1];
   const card=h=>{inner.innerHTML='<div class="empty"><div class="card">'+h+'</div></div>'};
   if(!k){card('<h2>請等老師開始考試</h2><p>請老師用開考的 QR code 開啟這一頁。</p>');return}
-  card('<h2>準備好了嗎？</h2><p><button class="btn primary" id="pickExam" style="font-size:22px;padding:16px 32px">選擇考卷檔</button></p><input type="file" id="exFile" hidden>');
+  card('<h2>準備好了嗎？</h2><p><button class="btn primary" id="pickExam" style="font-size:22px;padding:16px 32px">選擇考卷檔</button></p><p class="hint" id="vs"></p><input type="file" id="exFile" hidden>');
+  const vs=()=>{const el=$('vs');if(!el)return;const v=pickVoice();el.textContent=v?'聲音：'+v.name+' ✓':'這台 iPad 找不到雅婷，會改用其他中文聲音'};
+  vs();setTimeout(vs,1200);setTimeout(vs,3500);synth&&synth.addEventListener&&synth.addEventListener('voiceschanged',vs);
   $('pickExam').onclick=()=>$('exFile').click();
   $('exFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;
     try{const {hdr,pdf}=await unpackExam(await f.arrayBuffer(),k);
       const ri=RATES.indexOf(hdr.rate);if(ri>=0){rateIdx=ri;showRate()}
       if(hdr.rep===1||hdr.rep===2)state.rep=hdr.rep;
-      window.__edits=hdr.edits||{};openPdf(pdf,hdr.name||'exam')}
+      window.__voicePref=hdr.voice||'';window.__edits=hdr.edits||{};openPdf(pdf,hdr.name||'exam')}
     catch(err){card('<h2>這個檔案打不開</h2><p>請告訴老師，確認考卷檔和 QR code 是同一次打包的。</p>')}};
 })();
 </script>

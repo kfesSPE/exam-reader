@@ -4,6 +4,7 @@
 <label>1. 選擇考卷 PDF</label><input type="file" id="pdf" accept=".pdf,application/pdf">
 <label>2. 檔名代號 <small>（不要寫科目、年級、班級）</small></label><input id="nm" value="e1">
 <label>3. 學生頁面網址</label><input id="site" size="46" placeholder="https://你的帳號.github.io/倉庫名/student.html">
+<label>聲音關鍵字 <small>（留空＝雅婷；iPad 上找不到時改用其他中文聲音）</small></label><input id="voice" placeholder="雅婷">
 <label>語速</label><select id="rate"><option>0.6</option><option>0.7</option><option>0.8</option><option selected>0.9</option><option>1</option><option>1.1</option><option>1.2</option></select>
 <label>每句念</label><select id="rep"><option value="1">1 次</option><option value="2">2 次</option></select>
 <p><button id="go">打包並加密</button> <span id="msg"></span></p>
@@ -20,7 +21,7 @@ $('go').onclick=async()=>{
   localStorage.setItem('site',site);$('msg').textContent='處理中…';
   try{
     const pdf=new Uint8Array(await f.arrayBuffer()),nm=$('nm').value.trim()||'e1';
-    const hdr=new TextEncoder().encode(JSON.stringify({name:nm,rate:Number($('rate').value),rep:Number($('rep').value),edits:{}}));
+    const hdr=new TextEncoder().encode(JSON.stringify({name:nm,rate:Number($('rate').value),rep:Number($('rep').value),voice:$('voice').value.trim(),edits:{}}));
     const raw=crypto.getRandomValues(new Uint8Array(32)),iv=crypto.getRandomValues(new Uint8Array(12));
     const key=await crypto.subtle.importKey('raw',raw,'AES-GCM',false,['encrypt']);
     const plain=new Uint8Array(4+hdr.length+pdf.length);new DataView(plain.buffer).setUint32(0,hdr.length);plain.set(hdr,4);plain.set(pdf,4+hdr.length);
